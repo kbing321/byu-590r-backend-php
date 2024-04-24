@@ -4,6 +4,9 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\API\RegisterController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\MovieController;
+use App\Http\Controllers\API\TrailerController;
+use App\Http\Controllers\API\ActorController;
+use App\Http\Controllers\API\DirectorController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -36,6 +39,9 @@ Route::middleware('auth:sanctum')->group( function () {
     Route::controller(MovieController::class)->group(function(){
         Route::post('movies/{id}/update_movie_picture', 'updateMoviePicture');
     });
+    Route::resource('trailers', TrailerController::class);
+    Route::resource('actors', ActorController::class);
+    Route::resource('directors', DirectorController::class);
 });
 
 // Route::middleware('auth:sanctum')->get('/user', function (Request $request) {

@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Models\ActorMovie;
 use App\Models\movie;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class MovieController extends BaseController
 {
@@ -34,10 +37,15 @@ class MovieController extends BaseController
      */
     public function store(Request $request)
     {
+        $request['actor'] = $request['actor'][0];
+
         $validator = Validator::make($request->all(), [
             'title' => 'required',
             'description' => 'required',
-            'movie_cover_picture' => 'required|image|mimes:jpeg,png,jpg,gif,svg'
+            'movie_cover_picture' => 'required|image|mimes:jpeg,png,jpg,gif,svg',
+            'trailer_id' => 'required',
+            'director_id' => 'required',
+            'actor' => 'required'
         ]);
 
         if($validator->fails()){
@@ -64,8 +72,34 @@ class MovieController extends BaseController
 
         $movie->title = $request['title'];
         $movie->description = $request['description'];
+        $movie->trailer_id = $request['trailer_id'];
+        $movie->director_id = $request['director_id'];
+        //$actors = $request->input('actor', []);
+        // $actorsArray = array_map('intval', explode(',', $request->input('actor', '')));
 
         $movie->save();
+
+        if($request['actor']) {
+            $actors_array = collect($request['actor'])->toArray();
+            $actor_movies = [];
+            
+            foreach($actors_array as $actor){
+                $actorIds = explode(",", $actor);
+                foreach($actorIds as $actorId) {
+                    array_push($actor_movies, [
+                        'movie_id' => $movie->id,
+                        'actor_id' => $actorId,
+                        'created_at' => Carbon::now(),
+                        'updated_at' => Carbon::now()
+                    ]);
+                }
+            }
+            ActorMovie::insert($actor_movies);
+        }
+
+        $movie->save();
+
+        
 
         if(isset($movie->movie_cover_picture)){
             $movie->movie_cover_picture = $this->getS3Url($movie->movie_cover_picture);
@@ -98,7 +132,10 @@ class MovieController extends BaseController
     {
         $validator = Validator::make($request->all(), [
             'title' => 'required',
-            'description' => 'required'
+            'description' => 'required',
+            'trailer_id' => 'required',
+            'director_id' => 'required',
+            'actor' => 'required'
         ]);
 
         if($validator->fails()) {
@@ -108,7 +145,33 @@ class MovieController extends BaseController
         $movie = movie::findOrFail($id);
         $movie->title = $request['title'];
         $movie->description = $request['description'];
+        $movie->trailer_id = $request['trailer_id'];
+        $movie->director_id = $request['director_id'];
         $movie->save();
+
+        
+        if($request['actor']) {
+            $actors_array = collect($request['actor'])->toArray();
+            $actor_movies = [];
+            
+            foreach($actors_array as $actor){
+                $actorIds = explode(",", $actor);
+                foreach($actorIds as $actorId) {
+                    array_push($actor_movies, [
+                        'movie_id' => $movie->id,
+                        'actor_id' => $actorId,
+                        'created_at' => Carbon::now(),
+                        'updated_at' => Carbon::now()
+                    ]);
+                }
+            }
+            DB::table('actor_movies')->where('movie_id', $movie->id)->delete();
+            ActorMovie::insert($actor_movies);
+        }
+
+        
+
+        $movie = movie::where('id', $id)->with(['actor', 'trailer', 'director'])->first();
 
         if(isset($movie->movie_cover_picture)){
             $movie->movie_cover_picture = $this->getS3Url($movie->movie_cover_picture);
@@ -164,6 +227,7 @@ class MovieController extends BaseController
     {
         $movie = movie::findOrFail($id);
         Storage::disk('s3')->delete($movie->movie_cover_picture);
+        DB::table('actor_movies')->where('movie_id', $movie->id)->delete();
         $movie->delete();
 
         $success['movie']['id'] = $id;
